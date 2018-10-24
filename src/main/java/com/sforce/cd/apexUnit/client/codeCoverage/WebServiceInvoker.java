@@ -95,7 +95,7 @@ public class WebServiceInvoker {
 
 	}
 
-	public String generateRequestString() {
+	public static String generateRequestString() {
 		String requestString = "";
 		try {
 			requestString = "grant_type=password&client_id=" + CommandLineArguments.getClientId() + "&client_secret="
@@ -121,7 +121,7 @@ public class WebServiceInvoker {
 				.shutDownWithDebugLog(e, "Error encountered while trying to encode the query string using UTF-8 format. The error says: "+ e.getMessage());
 			}
 		}
-		return doGet(relativeServiceURL, accessToken);
+		return (JSONObject) JSONValue.parse(doGet(relativeServiceURL, accessToken));
 	}
 
 	/*
@@ -136,8 +136,7 @@ public class WebServiceInvoker {
 	 * 
 	 * @return : json response from the get request
 	 */
-	public static JSONObject doGet(String relativeServiceURL, String accessToken) {
-
+	public static String doGet(String relativeServiceURL, String accessToken) {
 		LOG.debug("relativeServiceURL in doGet method:" + relativeServiceURL);
 		HttpClient httpclient = new HttpClient();
 		GetMethod get = null;
@@ -148,6 +147,23 @@ public class WebServiceInvoker {
 		get.setRequestHeader("Authorization", "Bearer " + accessToken);
 		LOG.debug("Start GET operation for the url..." + authorizationServerURL);
 		InputStream instream = null;
+		
+		
+		try {
+			httpclient.executeMethod(get);
+			return get.getResponseBodyAsString();
+		} catch (HttpException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		} catch (IOException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		
+		return null;
+		
+		/*
+		
 		try {
 			instream = executeHTTPMethod(httpclient, get, authorizationServerURL);
 			LOG.debug("done with get operation");
@@ -208,6 +224,7 @@ public class WebServiceInvoker {
 				.shutDownWithDebugLog(e, "Encountered IO exception when closing the stream after reading response from the get method. The error says: "+ e.getMessage());
 			}
 		}
+		*/
 	}
 
 	/**

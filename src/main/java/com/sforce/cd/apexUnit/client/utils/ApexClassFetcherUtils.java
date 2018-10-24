@@ -16,23 +16,37 @@ package com.sforce.cd.apexUnit.client.utils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.apache.commons.httpclient.HttpClient;
+import org.apache.commons.httpclient.methods.GetMethod;
+import org.apache.commons.httpclient.methods.PostMethod;
+import org.apache.commons.httpclient.methods.StringRequestEntity;
+import org.json.simple.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.gson.Gson;
 import com.sforce.cd.apexUnit.ApexUnitUtils;
 import com.sforce.cd.apexUnit.arguments.CommandLineArguments;
 import com.sforce.cd.apexUnit.client.QueryConstructor;
+import com.sforce.cd.apexUnit.client.codeCoverage.OAuthTokenGenerator;
+import com.sforce.cd.apexUnit.client.codeCoverage.WebServiceInvoker;
 import com.sforce.cd.apexUnit.client.connection.ConnectionHandler;
 import com.sforce.cd.apexUnit.client.fileReader.ApexManifestFileReader;
+import com.sforce.cd.apexUnit.model.ApexClass;
 import com.sforce.soap.partner.PartnerConnection;
 import com.sforce.soap.partner.QueryResult;
 import com.sforce.soap.partner.sobject.SObject;
 import com.sforce.ws.ConnectionException;
+
+import jdk.internal.jline.internal.Log;
 
 /*
  * ApexClassFetcher : This class helps to fetch Apex Classes (names/id's) based on various criteria .
@@ -44,6 +58,43 @@ public class ApexClassFetcherUtils {
 	private static Logger LOG = LoggerFactory.getLogger(ApexClassFetcherUtils.class);
 	public static Map<String, String> apexClassMap = new HashMap<String, String>();
 	public static Map<String, String> duplicateApexClassMap = new HashMap<String, String>();
+	
+	// Retrieve all apex class names, populate test and source class collections
+	public static Collection<ApexClass> getApexClasses() {
+		ArrayList<ApexClass> classes = new ArrayList<ApexClass>();
+		ToolingResponse resp;
+		Gson gson = new Gson();
+		
+		String query = "SELECT+Id,Name,SymbolTable+FROM+ApexClass";
+		do {
+			String json = WebServiceInvoker.doGet("/services/data/v43.0/tooling/query?q=" + query,
+					OAuthTokenGenerator.getOrgToken());
+			
+			resp = gson.fromJson(json, ToolingResponse.class);
+			classes.addAll(resp.records);
+			query = resp.queryLocator;
+		} while (!resp.done);
+		
+		for (ApexClass ac : classes) {
+			for (String mod : ac.SymbolTable.tableDeclaration.modifiers) {
+				if ("testMethod".equals(mod)) {
+					ac.testClass = true;
+					break;
+				}
+			}
+		}
+		
+		return classes;
+	}
+	
+	public class ToolingResponse {
+	    public int size;
+	    public int totalSize;
+	    public boolean done;
+	    public String queryLocator;
+	    public String entityTypeName;
+		public Collection<ApexClass> records;
+	}
 
 	/*
 	 * This method returns a string array of apex test class id's. Either a
@@ -267,6 +318,13 @@ public class ApexClassFetcherUtils {
 	 * soql query
 	 */
 	private static String[] fetchApexClassesAsArray(QueryResult queryResult) {
+		
+		Pattern p = null;
+		String regex = CommandLineArguments.getTrueTestRegex();
+		if (regex != null) {
+			p = Pattern.compile(regex);
+		}
+		
 		Object[] apexClassesObjArr = null;
 		if (queryResult.getDone()) {
 			SObject[] sObjects = queryResult.getRecords();
@@ -274,12 +332,23 @@ public class ApexClassFetcherUtils {
 				ArrayList<String> apexClasses = new ArrayList<String>();
 				LOG.debug("Fetched Apex classes:");
 				for (SObject sobject : sObjects) {
-					apexClasses.add(sobject.getField("Id").toString());
+					
+					String id = sobject.getId();
+					String name = (String) sobject.getField("Name");
+					
+					if (p != null) {
+						Matcher m = p.matcher(name);
+						if (!m.matches()) {
+							LOG.debug(String.format("Ignoring class {0} due to regex", name));
+							continue;
+						}
+					}
+					
+					apexClasses.add(id);
 					// crucial step. Populate apexCLassMap each time a class is
 					// fetched. Will be used for lot of computations
-					apexClassMap.put(sobject.getField("Id").toString(), sobject.getField("Name").toString());
-					LOG.debug("ApexClassId : " + sobject.getField("Id").toString() + "  ApexClassName : "
-							+ sobject.getField("Name").toString());
+					apexClassMap.put(id, name);
+					LOG.debug("ApexClassId : " + id + "  ApexClassName : " + name);
 				}
 				apexClassesObjArr = apexClasses.toArray();
 				//line below only works for java 1.6 and above

@@ -173,9 +173,10 @@ public class CodeCoverageComputer {
 				JSONObject responseJsonObject = null;
 				responseJsonObject = WebServiceInvoker.doGet(relativeServiceURL, soqlcc,
 						OAuthTokenGenerator.getOrgToken());
-				LOG.debug("responseJsonObject says " + responseJsonObject + "\n relativeServiceURL is "
+				LOG.info("responseJsonObject says " + responseJsonObject + "\n relativeServiceURL is "
 						+ relativeServiceURL + "\n soqlcc is " + soqlcc);
 				if (responseJsonObject != null) {
+                    LOG.info("Response object: " + responseJsonObject.toString());
 					apexClassCodeCoverageBeans = processJSONResponseAndConstructCodeCoverageBeans(connection,
 							(JSONArray) responseJsonObject.get("records"));
 				}

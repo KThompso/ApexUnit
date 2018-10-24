@@ -65,6 +65,7 @@ public class ApexUnitRunner {
 				&& !skipCodeCoverageComputation) {
 			ApexUnitUtils.shutDownWithErrMsg("Either of the source class manifest file or source class regex should be provided");
 		}
+		
 		// Invoke the FlowController.logicalFlow() that handles the entire
 		// logical flow of ApexUnit tool.
 		TestExecutor testExecutor = new TestExecutor();
