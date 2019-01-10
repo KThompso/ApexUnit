@@ -17,8 +17,6 @@ package com.sforce.cd.apexUnit.client;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.sforce.soap.partner.sobject.SObject;
-
 /*
  * Constructs and returns queries for the client to invoke web services and fetch the data from the org
  */
