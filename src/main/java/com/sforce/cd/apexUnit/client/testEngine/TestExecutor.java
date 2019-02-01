@@ -144,17 +144,16 @@ public class TestExecutor {
 		return apexReportBean.toArray(new ApexReportBean[0]);
 		
 	}
-	
+
 	private String processClassArrayForQuery(String[] classesAsArray) {
-		String queryString = "";
-		for (int i = 0; i < classesAsArray.length; i++) {
-			queryString += "'" + classesAsArray[i] + "'";
-			queryString += ",";
+		StringBuilder sb = new StringBuilder();
+		for (String classid : classesAsArray) {
+			sb.append("'").append(classid).append("',");
 		}
-		if (queryString.length() > 1) {
-			queryString = queryString.substring(0, queryString.length() - 1);
+		if (sb.length() > 1) {
+			return sb.toString().substring(0, sb.length() - 1);
 		}
-		return queryString;
+		return sb.toString();
 	}
 
 }
