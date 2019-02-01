@@ -28,6 +28,8 @@ public class CommandLineArguments {
 	public static final String MANIFEST_FILES_WITH_SOURCE_CLASS_NAMES_FOR_CODE_COVERAGE_COMPUTATION = "-manifest.files.with.source.class.names.for.code.coverage.computation";
 	public static final String REGEX_FOR_SELECTING_TEST_CLASSES_TO_EXECUTE = "-regex.for.selecting.test.classes.to.execute";
 	public static final String REGEX_FOR_SELECTING_SOURCE_CLASSES_FOR_CODE_COVERAGE_COMPUTATION = "-regex.for.selecting.source.classes.for.code.coverage.computation";
+	public static final String TEST_CLASS_REGEX = "-test.class.regex";
+	public static final String CODE_COVERAGE_REGEX = "-code.coverage.regex";
 	public static final String ORG_WIDE_CODE_COVERAGE_THRESHOLD = "-org.wide.code.coverage.threshold";
 	public static final String TEAM_CODE_COVERAGE_THRESHOLD = "-team.code.coverage.threshold";
 	public static final String MAX_TEST_EXECUTION_TIME_THRESHOLD = "-max.test.execution.time.threshold";
@@ -56,9 +58,15 @@ public class CommandLineArguments {
 	@Parameter(names = REGEX_FOR_SELECTING_TEST_CLASSES_TO_EXECUTE, description = "The test regex used by the team for the apex test classes. "
 			+ "All tests beginning with this parameter in the org will be selected to run", variableArity = true)
 	static private String testRegex;
+	@Parameter(names = TEST_CLASS_REGEX, description = "The true test regex used by the team for the apex test classes. "
+			+ "All tests beginning with this parameter in the org will be selected to run", variableArity = true)
+	static private String trueTestRegex;
 	@Parameter(names = REGEX_FOR_SELECTING_SOURCE_CLASSES_FOR_CODE_COVERAGE_COMPUTATION, description = "The source regex used by the team for the apex source classes. "
 			+ "All classes beginning with this parameter in the org will be used to compute team code coverage", variableArity = true)
 	static private String sourceRegex;
+	@Parameter(names = CODE_COVERAGE_REGEX, description = "The true source regex used by the team for the apex source classes. "
+			+ "All classes beginning with this parameter in the org will be used to compute team code coverage", variableArity = true)
+	static private String trueSourceRegex;
 	@Parameter(names = ORG_WIDE_CODE_COVERAGE_THRESHOLD, description = "Org wide minimum code coverage required to meet the code coverage standards", validateWith = PercentageInputValidator.class, variableArity = true)
 	static private Integer orgWideCodeCoverageThreshold = 75;
 	@Parameter(names = TEAM_CODE_COVERAGE_THRESHOLD, description = "Team wide minimum code coverage required to meet the code coverage standards", validateWith = PercentageInputValidator.class, variableArity = true)
@@ -103,6 +111,10 @@ public class CommandLineArguments {
 
 	public static String getTestRegex() {
 		return testRegex;
+	}
+
+	public static String getTrueTestRegex() {
+		return trueTestRegex;
 	}
 
 	public static String getSourceRegex() {

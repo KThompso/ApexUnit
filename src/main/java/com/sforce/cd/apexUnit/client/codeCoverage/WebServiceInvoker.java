@@ -25,7 +25,10 @@ import java.util.Iterator;
 import java.util.Set;
 
 import org.apache.commons.httpclient.HttpClient;
+import com.sforce.cd.apexUnit.model.TestExecutionRequest;
+import org.apache.commons.httpclient.Header;
 import org.apache.commons.httpclient.HostConfiguration;
+import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.HttpException;
 import org.apache.commons.httpclient.URI;
 import org.apache.commons.httpclient.URIException;
@@ -49,6 +52,7 @@ import static java.net.URLEncoder.encode;
  */
 public class WebServiceInvoker {
 	private static Logger LOG = LoggerFactory.getLogger(WebServiceInvoker.class);
+	public static final String API_VERSION = "44.0";
 
 	/*
 	 * Utility to perform HTTP post operation on the orgUrl with the specific
@@ -60,54 +64,71 @@ public class WebServiceInvoker {
 	 * @return : hashmap with key-value pairs of response from the post query
 	 */
 	public HashMap<String, String> doPost(String relativeServiceURL) {
+		Header[] headers = new Header[] { new Header("Content-Type", "application/x-www-form-urlencoded"),
+				new Header("X-PrettyPrint", "1") };
 
+		String json = doPost(relativeServiceURL, generateRequestString(), "application/x-www-form-urlencoded", "UTF-8",
+				headers);
+		
+		Gson gson = new Gson();
+		// obtain the result map from the response body and get the access token
+		return gson.fromJson(json, new TypeToken<HashMap<String, String>>() {
+		}.getType());
+	}
+
+	public static String doPost(String relativeServiceURL, String body, String contentType, String encoding,
+			Header[] headers) {
 		PostMethod post = null;
 		HttpClient httpclient = new HttpClient();
-		String requestString = "";
-		HashMap<String, String> responseMap = new HashMap<String, String>();
-		
-
-		try {
-			// the client id and secret is applicable across all dev orgs
-			requestString = generateRequestString();
 			String authorizationServerURL = CommandLineArguments.getOrgUrl() + relativeServiceURL;
 			httpclient.getParams().setSoTimeout(0);
 
+		try {
 			// Set proxy if needed
 			if (CommandLineArguments.getProxyHost() != null && CommandLineArguments.getProxyPort() != null) {
 				LOG.debug("Setting proxy configuraiton to " + CommandLineArguments.getProxyHost() + " on port "
 						+ CommandLineArguments.getProxyPort());
 				HostConfiguration hostConfiguration = httpclient.getHostConfiguration();
-				hostConfiguration.setProxy(CommandLineArguments.getProxyHost(),CommandLineArguments.getProxyPort());
+				hostConfiguration.setProxy(CommandLineArguments.getProxyHost(), CommandLineArguments.getProxyPort());
 				httpclient.setHostConfiguration(hostConfiguration);
 			}
 
 			post = new PostMethod(authorizationServerURL);
-			post.addRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-			post.addRequestHeader("X-PrettyPrint", "1");
-			post.setRequestEntity(new StringRequestEntity(requestString, "application/x-www-form-urlencoded", "UTF-8"));
+
+			if (headers != null) {
+				for (Header header : headers)
+					post.addRequestHeader(header);
+			}
+
+			post.setRequestEntity(new StringRequestEntity(body, contentType, encoding));
 			httpclient.executeMethod(post);
-
-			Gson json = new Gson();
-			// obtain the result map from the response body and get the access
-			// token
-			responseMap = json.fromJson(post.getResponseBodyAsString(), new TypeToken<HashMap<String, String>>() {
-			}.getType());
-
+			return post.getResponseBodyAsString();
 		} catch (Exception ex) {
-			ApexUnitUtils.shutDownWithDebugLog(ex, "Exception during post method: " + ex);
-			if(LOG.isDebugEnabled()) {
+			ApexUnitUtils.shutDownWithDebugLog(ex, ex.getMessage());
+			if (LOG.isDebugEnabled()) {
 				ex.printStackTrace();
 			}
 		} finally {
 			post.releaseConnection();
 		}
-
-		return responseMap;
-
+		return null;
 	}
 
-	public String generateRequestString() {
+	// Returns job id?
+	public static String runTestsAsync(TestExecutionRequest testExecutionRequest) {
+		String relativeServiceUrl = "/services/data/v" + API_VERSION + "/tooling/runTestsAsynchronous/";
+
+		Header[] headers = new Header[] { new Header("Accept", "application/json"),
+				new Header("Authorization", "OAuth " + OAuthTokenGenerator.getOrgToken()) };
+
+		String requestString = testExecutionRequest.toJson();
+
+		// TODO handle bad response.
+		String json = doPost(relativeServiceUrl, requestString, "application/json", "UTF-8", headers);
+		return json.replace("\"", "");
+	}
+
+	public static String generateRequestString() {
 		String requestString = "";
 		try {
 			requestString = "grant_type=password&client_id=" + CommandLineArguments.getClientId() + "&client_secret="
@@ -115,7 +136,7 @@ public class WebServiceInvoker {
 					+ "&password=" + encode(CommandLineArguments.getPassword(), "UTF-8");
 		} catch (UnsupportedEncodingException ex) {
 			ApexUnitUtils.shutDownWithDebugLog(ex, "Exception during request string generation: " + ex);
-			if(LOG.isDebugEnabled()) {
+			if (LOG.isDebugEnabled()) {
 				ex.printStackTrace();
 			}
 		}
@@ -129,26 +150,26 @@ public class WebServiceInvoker {
 				relativeServiceURL += "/query/?q=" + encode(soql, "UTF-8");
 			} catch (UnsupportedEncodingException e) {
 
-				ApexUnitUtils
-				.shutDownWithDebugLog(e, "Error encountered while trying to encode the query string using UTF-8 format. The error says: "+ e.getMessage());
+				ApexUnitUtils.shutDownWithDebugLog(e,
+						"Error encountered while trying to encode the query string using UTF-8 format. The error says: "
+								+ e.getMessage());
 			}
 		}
-		return doGet(relativeServiceURL, accessToken);
+		return (JSONObject) JSONValue.parse(doGet(relativeServiceURL, accessToken));
 	}
 
 	/*
-	 * method to perform get operation using the access token for the org and
-	 * return the json response
+	 * method to perform get operation using the access token for the org and return
+	 * the json response
 	 * 
 	 * @param relativeServiceURL - relative service url w.r.t org url for firing
 	 * post request
 	 * 
-	 * @param accessToken : access token for the org(generated in the post
-	 * method)
+	 * @param accessToken : access token for the org(generated in the post method)
 	 * 
 	 * @return : json response from the get request
 	 */
-	public static JSONObject doGet(String relativeServiceURL, String accessToken) {
+	public static String doGet(String relativeServiceURL, String accessToken) {
 
 		LOG.debug("relativeServiceURL in doGet method:" + relativeServiceURL);
 		HttpClient httpclient = new HttpClient();
@@ -157,7 +178,7 @@ public class WebServiceInvoker {
 			LOG.debug("Setting proxy configuraiton to " + CommandLineArguments.getProxyHost() + " on port "
 				+ CommandLineArguments.getProxyPort());
 			HostConfiguration hostConfiguration = httpclient.getHostConfiguration();
-			hostConfiguration.setProxy(CommandLineArguments.getProxyHost(),CommandLineArguments.getProxyPort());
+			hostConfiguration.setProxy(CommandLineArguments.getProxyHost(), CommandLineArguments.getProxyPort());
 			httpclient.setHostConfiguration(hostConfiguration);
 		}
 		GetMethod get = null;
@@ -167,97 +188,46 @@ public class WebServiceInvoker {
 		get.addRequestHeader("Content-Type", "application/json");
 		get.setRequestHeader("Authorization", "Bearer " + accessToken);
 		LOG.debug("Start GET operation for the url..." + authorizationServerURL);
-		InputStream instream = null;
-		try {
-			instream = executeHTTPMethod(httpclient, get, authorizationServerURL);
-			LOG.debug("done with get operation");
 
-			JSONObject json = (JSONObject) JSONValue.parse(new InputStreamReader(instream));
-			LOG.debug("is json null? :" + json == null ? "true" : "false");
-			if (json != null) {
-				if (LOG.isDebugEnabled()) {
-					LOG.debug("ToolingApi.get response: " + json.toString());
-					Set<String> keys = castSet(String.class, json.keySet());
-					Iterator<String> jsonKeyIter = keys.iterator();
-					LOG.debug("Response for the GET method: ");
-					while (jsonKeyIter.hasNext()) {
-						String key = jsonKeyIter.next();
-						LOG.debug("key : " + key + ". Value :  " + json.get(key) + "\n");
-						// TODO if query results are too large, only 1st batch
-						// of results
-						// are returned. Need to use the identifier in an
-						// additional query
-						// to retrieve rest of the next batch of results
-
-						if (key.equals("nextRecordsUrl")) {
-							// fire query to the value for this key
-							// doGet((String) json.get(key), accessToken);
 							try {
-								authorizationServerURL = CommandLineArguments.getOrgUrl() + (String) json.get(key);
-								get.setURI(new URI(authorizationServerURL, false));
-								instream = executeHTTPMethod(httpclient, get, authorizationServerURL);
-								JSONObject newJson = (JSONObject) JSONValue.parse(new InputStreamReader(instream));
-								if (newJson != null) {
-									Set<String> newKeys = castSet(String.class, json.keySet());
-									Iterator<String> newJsonKeyIter = newKeys.iterator();
-									while (newJsonKeyIter.hasNext()) {
-										String newKey = newJsonKeyIter.next();
-										json.put(newKey, newJson.get(newKey));
-										LOG.debug("newkey : " + newKey + ". NewValue :  " +  newJson.get(newKey) + "\n");
-									}
-								}
-							
-								} catch (URIException e) {
-									ApexUnitUtils.shutDownWithDebugLog(e, "URI exception while fetching subsequent batch of result");
-								} 
-							}
-							
-						}
-					}
+			httpclient.executeMethod(get);
+			return get.getResponseBodyAsString();
+		} catch (HttpException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		} catch (IOException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
 				}
-			return json;
-		} finally {
-			get.releaseConnection();
-			try {
-				if (instream != null) {
-					instream.close();
 
-				} 
-			} catch (IOException e) {
-				ApexUnitUtils
-				.shutDownWithDebugLog(e, "Encountered IO exception when closing the stream after reading response from the get method. The error says: "+ e.getMessage());
-			}
-		}
+		return null;
 	}
 
 	/**
 	 * 
 	 * execute the HTTP Get method and return response as Input stream
 	 * 
-	 * @param httpclient
-	 *            HTTPClient
-	 * @param get
-	 *            GetMethod
+	 * @param httpclient HTTPClient
+	 * @param get        GetMethod
 	 * @return
 	 * @throws IOException
 	 * @throws HttpException
 	 */
 
-	private static InputStream executeHTTPMethod(HttpClient httpclient, GetMethod get,
-			String authorizationServerURL) {
+	private static InputStream executeHTTPMethod(HttpClient httpclient, GetMethod get, String authorizationServerURL) {
 		try {
 			httpclient.executeMethod(get);
 		} catch (HttpException e) {
-			ApexUnitUtils
-			.shutDownWithDebugLog(e, "Encountered HTTP exception when executing get method using OAuth authentication for the url "+ authorizationServerURL 
-					+". The error says: "+ e.getMessage());
+			ApexUnitUtils.shutDownWithDebugLog(e,
+					"Encountered HTTP exception when executing get method using OAuth authentication for the url "
+							+ authorizationServerURL + ". The error says: " + e.getMessage());
 		} catch (IOException e) {
-			ApexUnitUtils
-			.shutDownWithDebugLog(e, "Encountered IO exception when executing get method using OAuth authentication for the url "+ authorizationServerURL 
-					+". The error says: "+ e.getMessage());
+			ApexUnitUtils.shutDownWithDebugLog(e,
+					"Encountered IO exception when executing get method using OAuth authentication for the url "
+							+ authorizationServerURL + ". The error says: " + e.getMessage());
 		}
-		LOG.info("Status code : "
-				+ get.getStatusCode() + "   Status message from the get request:" + get.getStatusText() + " Reason phrase: "+get.getStatusLine().getReasonPhrase());
+		LOG.info("Status code : " + get.getStatusCode() + "   Status message from the get request:"
+				+ get.getStatusText() + " Reason phrase: " + get.getStatusLine().getReasonPhrase());
 		
 		InputStream instream = null;
 		try {
@@ -269,8 +239,9 @@ public class WebServiceInvoker {
 			instream = get.getResponseBodyAsStream();
 		} catch (IOException e) {
 
-			ApexUnitUtils
-			.shutDownWithDebugLog(e, "Encountered IO exception when obtaining response body for the get method. The error says: "+ e.getMessage());
+			ApexUnitUtils.shutDownWithDebugLog(e,
+					"Encountered IO exception when obtaining response body for the get method. The error says: "
+							+ e.getMessage());
 		}
 		return instream;
 	}

@@ -58,7 +58,7 @@ public class TestStatusPollerAndResultHandler {
 		ApexReportBean[] apexReportBeans = null;
 		QueryResult queryResult = null;
 		try {
-			 queryResult = conn.query(soql);
+			 queryResult = conn.queryAll(soql);
 		} catch (ConnectionException e) {
 			ApexUnitUtils.shutDownWithDebugLog(e, ConnectionHandler
 					.logConnectionException(e, conn, soql));
